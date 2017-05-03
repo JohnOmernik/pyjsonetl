@@ -232,6 +232,7 @@ def main():
                     with open(f, 'rb') as f_in:
                         with gzip.open(f + ".gz", 'wb') as f_out:
                             shutil.copyfileobj(f_in, f_out)
+                    os.remove(f)
                     f = f + ".gz"
                     new_file = new_file + ".gz"
                 shutil.move(f, new_file)
