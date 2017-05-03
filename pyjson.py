@@ -168,8 +168,8 @@ def main():
                 print("Write JSON Ar to %s at %s records - Size: %s - Seconds since last write: %s - Partitions in this batch: %s" % (curfile, rowcnt, sizecnt, timedelta, parts))
 
             for part in parts:
+                partar = []
                 for x in jsonar:
-                    partar = []
                     try:
                         curpart = x[loadedenv['partition_field']]
                     except:
@@ -193,9 +193,10 @@ def main():
                 for x in partar:
                     fout.write(json.dumps(x) + "\n")
                 fout.close()
-                cursize =  os.path.getsize(final_file)
+                cursize = os.path.getsize(final_file)
                 ledger = [curtime, cursize, final_file]
                 part_ledger[part] = ledger
+                partar = []
             jsonar = []
             rowcnt = 0
             sizecnt = 0
@@ -214,6 +215,7 @@ def main():
                 except:
                     print("Partition Create failed, it may have been already created for %s" % (base_dir))
             if s > loadedenv['filemaxsize'] or (curtime - l) > loadedenv['partmaxage']:
+
                 new_file_name = loadedenv['uniq_val'] + "_" + str(curtime) + ".json"
                 new_file = base_dir + "/" + new_file_name
                 if loadedenv['debug'] >= 1:
@@ -222,7 +224,7 @@ def main():
                         outreason = "Max Size"
                     else:
                         outreason = "Max Age"
-                    print("%s reached - Size: %s - Age: %s - Writing to %s" % (outreason, cursize, curtime - l, new_file))
+                    print("%s reached - Size: %s - Age: %s - Writing to %s" % (outreason, s, curtime - l, new_file))
 
                 if loadedenv['json_gz_compress'] == 1:
                     if loadedenv['debug'] >= 1:
