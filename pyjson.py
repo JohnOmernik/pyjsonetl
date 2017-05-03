@@ -27,7 +27,7 @@ envvars['timemax'] = [60, False, 'int']
 envvars['sizemax'] = [256000, False, 'int']
 
 # JSON Options
-envars['json_gz_compress'] = [0, False, 'bool'] # Not supported yet
+envvars['json_gz_compress'] = [0, False, 'bool'] # Not supported yet
 envvars['filemaxsize'] = [8000000, False, 'int']
 envvars['uniq_env'] = ['HOSTNAME', False, 'str']
 
@@ -80,7 +80,7 @@ def main():
     rowcnt = 0
     sizecnt = 0
     lastwrite = int(time.time()) - 1
-    parqar = []
+    jsonar = []
     part_ledger = {}
     curfile = loadedenv['uniq_val'] + "_curfile.json"
 
@@ -103,7 +103,7 @@ def main():
             # This is a message let's add it to our queue
             try:
                 # This may not be the best way to approach this.
-                val = message.value().decode('ascii', errors='replace')
+                val = message.value().decode('ascii', errors='ignore')
             except:
                 print(message.value())
                 val = ""
@@ -117,20 +117,23 @@ def main():
                 except:
                     failedjson = 1
                     if loadedenv['remove_fields_on_fail'] == 1:
-                        print "JSON Error likely due to binary in request - per config remove_field_on_fail - we are removing the the following fields and trying again"
+                        print("JSON Error likely due to binary in request - per config remove_field_on_fail - we are removing the the following fields and trying again")
                         while failedjson == 1:
+                            repval = message.value()
                             for f in loadedenv['remove_fields'].split(","):
+                                print("Trying to remove: %s" % f)
+                                repval = re.sub(b'"' + f.encode() + b'":".+?","', b'"' + f.encode() + b'":"","', repval)
                                 try:
-                                    print "Trying to remove: %s" % f
-                                    dataar.append(json.loads(re.sub(b'"' + f + '":".+?","', b'"' + f + '":"","', message.value()).decode("ascii", errors='ignore')))
+                                    jsonar.append(json.loads(repval.decode("ascii", errors='ignore')))
                                     failedjson = 0
                                     break
                                 except:
-                                    print "Still could not force into json even after dropping %s" % f
-                                    if loadedenv['debug'] == 1:
-                                        print message.value().decode("ascii", errors='ignore')
+                                    print("Still could not force into json even after dropping %s" % f)
                             if failedjson == 1:
+                                if loadedenv['debug'] == 1:
+                                     print(repval.decode("ascii", errors='ignore'))
                                 failedjson = 2
+
                     if loadedenv['debug'] >= 1 and failedjson >= 1:
                         print ("JSON Error - Debug - Attempting to print")
                         print("Raw form kafka:")
@@ -150,28 +153,25 @@ def main():
             break
 
 
-            # If our row count is over the max, our size is over the max, or time delta is over the max, write the group to the parquet.
+            # If our row count is over the max, our size is over the max, or time delta is over the max, write the group to the json.
         if (rowcnt >= loadedenv['rowmax'] or timedelta >= loadedenv['timemax'] or sizecnt >= loadedenv['sizemax']) and len(jsonar) > 0:
-            
-
-            # parqdf = pd.DataFrame.from_records([l for l in parqar])
             parts = []
             for x in jsonar:
                 try:
-                    p = x[loadedenv['partitionfield']
+                    p = x[loadedenv['partition_field']]
                 except:
                     print("Error: Record without Partition field - Using default Partition of %s" % loadedenv['unknownpart'])
                     p = loadedenv['unknownpart']
                 if not p in parts:
                     parts.append(p)
             if loadedenv['debug'] >= 1:
-                print("Write Dataframe to %s at %s records - Size: %s - Seconds since last write: %s - Partitions in this batch: %s" % (curfile, rowcnt, sizecnt, timedelta, parts))
+                print("Write JSON Ar to %s at %s records - Size: %s - Seconds since last write: %s - Partitions in this batch: %s" % (curfile, rowcnt, sizecnt, timedelta, parts))
 
             for part in parts:
-                partar = []
                 for x in jsonar:
+                    partar = []
                     try:
-                        curpart = x[loadedenv['partitionfield']]
+                        curpart = x[loadedenv['partition_field']]
                     except:
                         curpart = loadedenv['unknownpart']
                     if curpart == part:
@@ -188,7 +188,7 @@ def main():
                     except:
                         print("Partition Create failed, it may have been already created for %s" % (base_dir))
                 if loadedenv['debug'] >= 1:
-                    print("Writing partition %s to %s" % (part, final_file))
+                    print("----- Writing partition %s to %s" % (part, final_file))
                 fout = open(final_file, 'a')
                 for x in partar:
                     fout.write(json.dumps(x) + "\n")
@@ -217,8 +217,16 @@ def main():
                 new_file_name = loadedenv['uniq_val'] + "_" + str(curtime) + ".json"
                 new_file = base_dir + "/" + new_file_name
                 if loadedenv['debug'] >= 1:
-                    print("Max Size or Max Age reached - Size: %s - Age: %s - Writing to %s" % (cursize, curtime - l, new_file))
+                    outreason = ""
+                    if s > loadedenv['filemaxsize']:
+                        outreason = "Max Size"
+                    else:
+                        outreason = "Max Age"
+                    print("%s reached - Size: %s - Age: %s - Writing to %s" % (outreason, cursize, curtime - l, new_file))
+
                 if loadedenv['json_gz_compress'] == 1:
+                    if loadedenv['debug'] >= 1:
+                        print("Compressing json files")
                     with open(f, 'rb') as f_in:
                         with gzip.open(f + ".gz", 'wb') as f_out:
                             shutil.copyfileobj(f_in, f_out)
@@ -228,7 +236,6 @@ def main():
                 removekeys.append(x)
         for y in removekeys:
             del part_ledger[y]
-
     c.close()
 
 def loadenv(evars):
