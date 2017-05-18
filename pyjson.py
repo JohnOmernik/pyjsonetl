@@ -65,8 +65,11 @@ def main():
         if loadedenv['zookeepers'] == "":
             print("Must specify either Bootstrap servers via BOOTSTRAP_BROKERS or Zookeepers via ZOOKEEPERS")
             sys.exit(1)
-
         mybs = bootstrap_from_zk(loadedenv['zookeepers'], loadedenv['kafka_id'])
+    else:
+        if loadedenv['bootstrap_brokers'] == 'mapr':
+            mybs = ''
+
     if loadedenv['debug'] >= 1:
         print (mybs)
 
@@ -74,7 +77,8 @@ def main():
 
 
     c = Consumer({'bootstrap.servers': mybs, 'group.id': loadedenv['group_id'], 'default.topic.config': {'auto.offset.reset': loadedenv['offset_reset']}})
-    c.subscribe([loadedenv['topic']])
+
+    c.subscribe([loadedenv['topic']], on_assign=print_assignment)
 
     # Initialize counters
     rowcnt = 0
@@ -240,6 +244,11 @@ def main():
         for y in removekeys:
             del part_ledger[y]
     c.close()
+
+def print_assignment(consumer, partitions):
+        if loadedenv['debug'] >= 1:
+            print('Assignment of group to partitions %s' % partitions)
+
 
 def loadenv(evars):
     print("Loading Environment Variables")
