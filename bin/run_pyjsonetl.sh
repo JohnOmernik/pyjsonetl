@@ -1,6 +1,9 @@
 #!/bin/bash
 
 # You must provide Bootstrap servers (kafka nodes and their ports OR Zookeepers and the kafka ID of the chroot for your kafka instance
+#
+# If using mapr streams comment out ZOOKEEPERS, and instead provide BOOTSTRAP_BROKERS="mapr" and the specify the topic in the MapR Format: i.e. TOPIC="/path/to/maprstreams:topicname"
+#
 export ZOOKEEPERS="node1:2181,node2:2181,node3:2181"
 export KAFKA_ID="kafkainstance"
 # OR
